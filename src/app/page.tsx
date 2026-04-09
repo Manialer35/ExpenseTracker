@@ -1,95 +1,103 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+"use client";
 
-export default function Home() {
+// Force dynamic rendering — this page fetches live data from Supabase
+// and must never be statically pre-rendered at build time.
+export const dynamic = "force-dynamic";
+
+import { useCallback, useEffect, useState } from "react";
+import type { CreateExpenseInput, Expense } from "@/types/expense";
+import { fetchExpenses, createExpense, deleteExpense } from "@/lib/expenses";
+import ExpenseSummary from "@/components/ExpenseSummary";
+import ExpenseForm from "@/components/ExpenseForm";
+import ExpenseList from "@/components/ExpenseList";
+
+export default function HomePage() {
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // ── Load expenses on mount ──────────────────────────────────────────────────
+  const loadExpenses = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchExpenses();
+      setExpenses(data);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "An unexpected error occurred while loading expenses."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadExpenses();
+  }, [loadExpenses]);
+
+  // ── Create expense ──────────────────────────────────────────────────────────
+  const handleCreate = useCallback(async (input: CreateExpenseInput) => {
+    setError(null);
+    const newExpense = await createExpense(input);
+    // Optimistically prepend so the list stays sorted newest-first
+    setExpenses((prev) => [newExpense, ...prev]);
+  }, []);
+
+  // ── Delete expense ──────────────────────────────────────────────────────────
+  const handleDelete = useCallback(async (id: string) => {
+    setError(null);
+    await deleteExpense(id);
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+  }, []);
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>src/app/page.tsx</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <div className="page-wrapper">
+      <div className="container">
+        {/* ── Header ────────────────────────────────────────────────────── */}
+        <header className="header">
+          <div className="header-inner">
+            <div className="header-icon" aria-hidden="true">💳</div>
+            <div>
+              <h1 className="header-title">Expense Tracker</h1>
+              <p className="header-subtitle">Keep your spending in check</p>
+            </div>
+          </div>
+        </header>
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+        <main className="main-content">
+          {/* ── Error Banner ───────────────────────────────────────────── */}
+          {error && (
+            <div
+              className="error-banner"
+              role="alert"
+              aria-live="assertive"
+              aria-atomic="true"
+            >
+              <span className="error-banner-icon" aria-hidden="true">⚠️</span>
+              <div className="error-banner-content">
+                <p className="error-banner-title">Something went wrong</p>
+                <p className="error-banner-message">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Summary ────────────────────────────────────────────────── */}
+          <ExpenseSummary expenses={expenses} loading={loading} />
+
+          {/* ── Form ───────────────────────────────────────────────────── */}
+          <ExpenseForm onSubmit={handleCreate} />
+
+          {/* ── List ───────────────────────────────────────────────────── */}
+          <ExpenseList
+            expenses={expenses}
+            loading={loading}
+            onDelete={handleDelete}
           />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        </main>
+      </div>
     </div>
   );
 }
